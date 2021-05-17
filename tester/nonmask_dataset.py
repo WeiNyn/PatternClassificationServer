@@ -32,8 +32,8 @@ class NonMaskDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = TesterDataset("/data/part_detect_smart_factory/result_gen_fabric_shape/")
+    dataset = NonMaskDataset("/data/part_detect_smart_factory/result_gen_fabric_shape/")
     for i in range(len(dataset)):
         image, mask, _ = dataset[i]
-        if not path.exists(image) or not path.exists(mask):
+        if not path.exists(image):
             raise ValueError(f"{image} - {mask}")
