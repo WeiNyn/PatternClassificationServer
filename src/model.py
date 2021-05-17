@@ -11,11 +11,11 @@ from PIL import Image
 import webcolors
 
 
-
 class PatternClassifier:
     """
-     Main class for pattern classification
+    Main class for pattern classification
     """
+
     def __init__(
         self,
         sample_dir: str,
@@ -23,6 +23,8 @@ class PatternClassifier:
         model_path: Optional[str] = None,
         device: str = "cuda",
         net: str = "alex",
+        max_image_size: int = 256,
+        min_image_size: int = 150
     ):
         """
         __init__ Create the PatternClassifier class
@@ -34,8 +36,11 @@ class PatternClassifier:
             device (str, optional): device to use. Defaults to "cuda".
             net (str, optional): backbone for Perceptual Similarity. Defaults to "alex".
         """
-        
-        self.dataset = ImageFolder(sample_dir, transform=tfs.Compose([tfs.ToTensor(), tfs.CenterCrop(sample_size)]))
+
+        self.dataset = ImageFolder(
+            sample_dir,
+            transform=tfs.Compose([tfs.ToTensor(), tfs.CenterCrop(sample_size)]),
+        )
 
         self.device = torch.device(device)
         self.model = lpips.LPIPS(net=net, version="0.1", model_path=model_path)
@@ -47,13 +52,16 @@ class PatternClassifier:
             [tfs.ToTensor(), tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         )
 
+        self.max_image_size = max_image_size
+        self.min_image_size = min_image_size
+
         self._get_features()
 
     def _get_features(self):
         """
         _get_features Create sample features for pattern matching.
         """
-        
+
         images = []
         labels = []
 
@@ -101,7 +109,7 @@ class PatternClassifier:
         Returns:
             List[int]: the main color of image
         """
-        
+
         size = img.size
         img = img.resize((28, 28))
         colors = img.getcolors(28 * 28)
@@ -120,7 +128,7 @@ class PatternClassifier:
         Returns:
             str: The name of color
         """
-        
+
         min_colors = {}
         for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
             r_c, g_c, b_c = webcolors.hex_to_rgb(key)
@@ -141,7 +149,7 @@ class PatternClassifier:
         Returns:
             Dict: dict(rgb: [R, G, B], color_name: str)
         """
-        
+
         rgb = self.get_color(img)
         color_name = self.closest_color(rgb)
 
@@ -157,29 +165,68 @@ class PatternClassifier:
         Returns:
             Dict: dict(query: np.array, result: Image, label: int, sim: float)
         """
-        
+
         size = img.size
-        if size[0] > 256:
-            size = (256, 256)
-            img = tfs.CenterCrop(size)(img)
+        resize_size = size
+        if size[0] > self.max_image_size:
+            resize_size = (self.max_image_size, self.max_image_size)
+            img = tfs.Resize(resize_size)(img)
 
         img = self.tfs(img)
-        img = img.repeat(len(self.images), 1, 1, 1)
 
-        images = [
-            tfs.Compose(
-                [tfs.CenterCrop(size), tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-            )(image)
-            for image in self.images
-        ]
+        quality_factor = 1 if size[0] > self.min_image_size else 5
+        img = img.repeat(len(self.images) * quality_factor, 1, 1, 1)
+
+        if size[0] > self.min_image_size:
+            images = [
+                tfs.Compose(
+                    [tfs.CenterCrop(size), tfs.Resize(resize_size), tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+                )(image)
+                for image in self.images
+            ]
+            
+            images = torch.stack(images)
+
+        else:
+            images = [
+                tfs.Compose(
+                    [
+                        tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                        tfs.FiveCrop(size),
+                        tfs.Lambda(lambda crops: torch.stack([crop for crop in crops]))
+                    ]
+                )(image)
+                for image in self.images
+            ]
+            
+            images = torch.stack(images)
+            images = images.view(-1, 3, size[0], size[1])
 
         with torch.no_grad():
             scores = self.model(
-                img.to(self.device), torch.stack(images).to(self.device)
+                img.to(self.device), images.to(self.device)
             )
-            scores = scores.detach().cpu().numpy()
+            scores = scores.detach().cpu()
+            scores = scores.view(scores.shape[0])
+            
+        if size[0] <= self.min_image_size:
+            top5 = torch.topk(scores, 5, largest=False, sorted=True).indices
+            top_count = dict()
+            max_index = None
+            
+            for index in top5:
+                index = int(index)
+                top_count[index//5] = top_count.get(index//5, 0) + 1
+                if top_count[index//5] >= 3:
+                    max_index = index//5
+                    break
+                
+            if max_index is None:
+                max_index = int(top5[0])//5
 
-        max_index = np.argmin(scores)
+        else:
+            max_index = torch.argmin(scores)
+        
         predict_label = self.labels[max_index]
         predict_label = self.dataset.classes[predict_label]
 
@@ -203,7 +250,7 @@ class PatternClassifier:
             grid (tuple, optional): the grid size for that mat (should use the same ratio with the image). Defaults to (56, 40).
 
         Returns:
-            List[List[int]]: the matrix for the border of the mask 
+            List[List[int]]: the matrix for the border of the mask
         """
         mat = np.array(mask.convert("L").resize(grid))
         marked_mat = []
@@ -228,25 +275,29 @@ class PatternClassifier:
         return marked_mat
 
     @staticmethod
-    def extend_square(i: int, j: int, marked_mat: List[List[int]], max_result: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    def extend_square(
+        i: int, j: int, marked_mat: List[List[int]], max_result: Tuple[int, int, int]
+    ) -> Tuple[int, int, int]:
         """
         extend_square Find the max square inside the mask
 
         Args:
             i (int): row index
             j (int): column index
-            marked_mat (List[List[int]]): the matrix for border 
+            marked_mat (List[List[int]]): the matrix for border
             max_result (Tuple[int, int, int]): the passing result (i, j, edge_size)
 
         Returns:
             Tuple[int]: (i, j, edge_size)
         """
-        
+
         if i >= len(marked_mat):
             return max_result
 
         if j < marked_mat[i][0]:
-            return PatternClassifier.extend_square(i, marked_mat[i][0], marked_mat, max_result)
+            return PatternClassifier.extend_square(
+                i, marked_mat[i][0], marked_mat, max_result
+            )
 
         if j > marked_mat[i][1]:
             return PatternClassifier.extend_square(i + 1, 0, marked_mat, max_result)
@@ -289,7 +340,7 @@ class PatternClassifier:
         Returns:
             List[int, int, int, int]: The border for the select region [left, top, right, bot]
         """
-        
+
         w, h = mask.size
 
         marked_mat = PatternClassifier.get_mat(mask, grid)
@@ -309,8 +360,8 @@ class PatternClassifier:
         )
 
         return square
-    
-    async def __call__(self, image: Image, mask: Image) -> Dict:
+
+    async def __call__(self, image: Image, mask: Image = None) -> Dict:
         """
         __call__ Process the pattern classification and color detection.
 
@@ -321,17 +372,16 @@ class PatternClassifier:
         Returns:
             Dict: dict(patter: Dict, color: Dict)
         """
-        square = self.select_square(mask)
-        image = image.crop(square)
         
+        if mask is not None:
+            square = self.select_square(mask)
+            image = image.crop(square)
+
         color = self.find_color(image)
-        
+
         w, _ = image.size
         image = image.resize((w, w))
-        
+
         pattern = self.find_pattern(image)
-        
-        return dict(
-            pattern=pattern,
-            color=color
-        )
+
+        return dict(pattern=pattern, color=color)
