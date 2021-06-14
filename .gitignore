@@ -1,4 +1,5 @@
 .vscode/
 __pycache__/
-model/
+model/*
 image_120_wider_sub/
+lightning_logs/
