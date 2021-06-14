@@ -82,6 +82,23 @@ uvicorn main:app --port 8888 --host 0.0.0.0
 
 Check the live document for API at: http://localhost:8888/docs
 
+## For internal use only
+
+This source build on the ubuntu70
+You can use the current folder as user HuyNguyen
+```sh
+ssh HuyNguyen@10.0.0.70
+```
+password: huy4321721
+
+dir: /data/HuyNguyen/Demo/PatternClassification/
+
+The RTX 3090 not compatible with current torch, please use the Conda environment name: demo
+
+```sh
+conda activate demo
+```
+
 
 [//]: # (These are reference links used in the body of this note and get stripped out when the markdown processor does its job. There is no need to format nicely because it shouldn't be seen. Thanks SO - http://stackoverflow.com/questions/4823468/store-comments-in-markdown-syntax)
 
