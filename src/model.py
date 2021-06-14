@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Tuple
 
 import numpy as np
 from PIL import Image
+from torchvision.transforms.transforms import CenterCrop
 import webcolors
 
 
@@ -20,7 +21,7 @@ class PatternClassifier:
         self,
         sample_dir: str,
         sample_size: Tuple[int, int] = (512, 512),
-        model_path: Optional[str] = None,
+        model: Optional[str] = None,
         device: str = "cuda",
         net: str = "alex",
         max_image_size: int = 256,
@@ -43,7 +44,12 @@ class PatternClassifier:
         )
 
         self.device = torch.device(device)
-        self.model = lpips.LPIPS(net=net, version="0.1", model_path=model_path)
+        if isinstance(model, str):
+            self.model = lpips.LPIPS(net=net, version="0.1", model_path=model)
+            
+        else:
+            self.model = model
+            
         self.model = self.model.to(self.device)
 
         self.sample_dir = sample_dir
@@ -67,8 +73,9 @@ class PatternClassifier:
 
         for i in range(len(self.dataset)):
             image, label = self.dataset[i]
-            images.append(image)
-            labels.append(label)
+            if label not in labels:
+                images.append(image)
+                labels.append(label)
 
         self.images = torch.stack(images).to(self.device)
         self.labels = labels
@@ -76,6 +83,15 @@ class PatternClassifier:
         del images
         del labels
 
+    def get_model(self):
+        return self.model.cpu()
+
+    def set_model(self, model):
+        self.model = None
+        torch.cuda.empty_cache()
+
+        self.model = model.to(self.device)
+    
     @staticmethod
     def get_central(arr: np.array) -> List:
         """
@@ -170,7 +186,8 @@ class PatternClassifier:
         resize_size = size
         if size[0] > self.max_image_size:
             resize_size = (self.max_image_size, self.max_image_size)
-            img = tfs.Resize(resize_size)(img)
+            # img = tfs.Resize(resize_size)(img)
+            img = tfs.CenterCrop(resize_size)(img)
 
         img = self.tfs(img)
 
@@ -180,7 +197,11 @@ class PatternClassifier:
         if size[0] > self.min_image_size:
             images = [
                 tfs.Compose(
-                    [tfs.CenterCrop(size), tfs.Resize(resize_size), tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+                    [
+                        # tfs.CenterCrop(size), 
+                        tfs.CenterCrop(resize_size),
+                        # tfs.Resize(resize_size), 
+                        tfs.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
                 )(image)
                 for image in self.images
             ]
@@ -269,7 +290,10 @@ class PatternClassifier:
                 if value == 0 and flag is True:
                     indices.append(index - 1)
                     break
-
+            
+            if flag is True and len(indices) == 1:
+                indices.append(index - 1)
+                
             marked_mat.append(indices)
 
         return marked_mat
