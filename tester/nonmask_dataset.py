@@ -7,11 +7,16 @@ from os import path
 class NonMaskDataset(Dataset):
     def __init__(self, root_folder: str):
         folders = [path.join(root_folder, folder) for folder in os.listdir(root_folder)]
+        # self.labels = [
+        #     int(image.split("_")[0])
+        #     for folder in folders
+        #     for image in os.listdir(folder)
+        #     if not image.startswith("mask")
+        # ]
         self.labels = [
-            int(image.split("_")[0])
+            int(folder.split('/')[-1])
             for folder in folders
             for image in os.listdir(folder)
-            if not image.startswith("mask")
         ]
         self.images = [
             path.join(folder, image)
