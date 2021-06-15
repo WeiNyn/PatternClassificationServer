@@ -409,3 +409,28 @@ class PatternClassifier:
         pattern = self.find_pattern(image)
 
         return dict(pattern=pattern, color=color)
+
+    def detect(self, image: Image, mask: Image = None) -> Dict:
+        """
+        detect Process the pattern classification and color detection.
+
+        Args:
+            image (Image): Image to process
+            mask (Image): The mask for image
+
+        Returns:
+            Dict: dict(patter: Dict, color: Dict)
+        """
+        
+        if mask is not None:
+            square = self.select_square(mask)
+            image = image.crop(square)
+
+        color = self.find_color(image)
+
+        w, _ = image.size
+        image = image.resize((w, w))
+
+        pattern = self.find_pattern(image)
+
+        return dict(pattern=pattern, color=color)
