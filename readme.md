@@ -12,10 +12,10 @@ The source code for pattern classification server, including:
 
 ## Requirements
 
-- FastAPI
-- Uvicorn
+- FastAPI (if user as server)
+- Uvicorn (if use as server)
 - Torch
-- Torch-lightning
+- Torch-lightning (if use as server)
 - LPIPS
 - Torchvision
 
@@ -81,6 +81,42 @@ uvicorn main:app --port 8888 --host 0.0.0.0
 ```
 
 Check the live document for API at: http://localhost:8888/docs
+
+## Use as package
+
+```python
+from lib import model, detect, change_samples
+
+from PIL import Image #must use pillow Image
+
+image = Image.open('[path to image]').convert('RGB')
+mask = Image.open('[path to mask]').convert('RGB')
+
+detect(images=[image], masks=[mask])
+
+#{
+#   'function': 'pattern_matching',
+#   'results': {
+#       'pattern_id': '118',
+#       'color_code': [195, 33, 65],
+#       'color_name': 'crimson'
+#    }
+# }
+
+change_samples(sample_dir='[path to samples dir]') #change database
+
+```
+
+Samples dir must be a folder that follow the ImageFolder format from torchvision
+```sh
+root:
+---class 1:
+------img-1
+------img-2
+---class 2:
+------img-1
+------img-2
+```
 
 ## For internal use only
 Please use the Conda environment name: demo
