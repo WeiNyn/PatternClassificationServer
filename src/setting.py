@@ -4,7 +4,7 @@ class Setting:
     model_path: str = 'model/pl_model_0517.pth'
     max_image_size: int = 256
     
-    run_train: bool = Fasle
+    run_train: bool = False
     
     model=dict(
         net='alex',
