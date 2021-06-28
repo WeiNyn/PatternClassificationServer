@@ -3,3 +3,8 @@ __pycache__/
 model/*
 image_120_wider_sub/
 lightning_logs/
+120_samples_database_cut/
+Test_samples/
+crop_img.jpg
+test_img.jpg
+color_folder/
