@@ -19,9 +19,13 @@ class ColorModel:
     
     def _load_samples(self):
         imgs = os.listdir(self.samples_dir)
+        
+        folders = os.listdir(self.samples_dir)
+        
         lib = collections.defaultdict(list)
-        for img in imgs:
-            img_path = os.path.join(self.samples_dir, img)
+        for folder in folders:
+            img = os.listdir(os.path.join(self.samples_dir, folder))[0]
+            img_path = os.path.join(self.samples_dir, folder, img)
             img_name = img.split('.')[0]
             img = Image.open(img_path).convert('RGB')
             color = self.get_color(img)
@@ -76,7 +80,7 @@ class ColorModel:
 
     def get_closest_color(self, color: List) -> str:
         """
-        closest_color Find closest predefined color
+        get_closest_color Find closest predefined color
 
         Args:
             color (List): The color in RGB
@@ -93,7 +97,13 @@ class ColorModel:
             bd = (b_c - color[2]) ** 2
             min_colors[(rd + gd + bd)] = key
 
-        return min_colors[min(min_colors.keys())]
+        top5 = sorted(min_colors.keys())[:5]
+        top5 = [min_colors[i] for i in top5]
+        
+        min_color = min_colors[min(min_colors.keys())]
+    
+        return dict(min_color=min_color, top5=top5)
+    
 
     def find_color(self, img: Image) -> Dict:
         """
@@ -103,10 +113,10 @@ class ColorModel:
             img (Image): input image to process
 
         Returns:
-            Dict: dict(rgb: [R, G, B], color_name: str)
+            Dict: dict(rgb: [R, G, B], hex: hex value, color_name: str)
         """
 
         rgb = self.get_color(img)
-        color_name = self.get_closest_color(rgb)
+        result = self.get_closest_color(rgb)
 
-        return dict(rgb=rgb, hex=webcolors.rgb_to_hex(rgb), color_name=color_name)
+        return dict(rgb=rgb, hex=webcolors.rgb_to_hex(rgb), result=result)
